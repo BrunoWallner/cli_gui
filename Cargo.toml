@@ -2,7 +2,7 @@
 name = "cli_gui"
 version = "0.1.0"
 authors = ["luca Biendl <b.lucab1211@gmail.com>"]
-licene = "GPL-3.0"
+license = "GPL-3.0"
 description = "A simple rust cross-platform libary designed for simple guis completely in cli"
 repository = "https://github.com/BrunoWallner/cli_gui"
 documentation = "https://github.com/BrunoWallner/cli_gui/blob/main/Documentation.md"
