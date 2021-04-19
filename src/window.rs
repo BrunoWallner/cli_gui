@@ -10,8 +10,6 @@ use crossterm::{
     terminal,
 };
 
-pub static SIZE: [u16; 2] = [125, 45];
-
 pub struct Size {
     pub x: u16,
     pub y: u16,
@@ -43,8 +41,8 @@ pub struct SubWindow {
 impl SubWindow {
     pub fn new(pos: Position, size: Size) -> Self {
         SubWindow {
-            text_buffer: vec![vec!["  ".to_string(); SIZE[1] as usize + 1]; SIZE[0] as usize + 1], 
-            color_buffer: vec![vec![0; SIZE[1] as usize + 1]; SIZE[0] as usize + 1],
+            text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
+            color_buffer: vec![vec![0; size.y as usize + 1]; size.x as usize + 1],
             size: size,
             pos: pos,
             border_color: 0,
@@ -54,17 +52,17 @@ impl SubWindow {
         }
     }
 
-    pub fn write(&mut self, pos: [usize; 2], text: String, color: u8) {
+    pub fn write(&mut self, pos: Position, text: String, color: u8) {
         let mut y = 0;
         let mut x = 0;
         for i in 0..text.len() as usize {
             // checks if position is valid and corrects it if neccessary
-            if pos[0] + x < self.size.x as usize && pos[1] < self.size.y as usize {
+            if pos.x + x < self.size.x && pos.y < self.size.y {
 
                 let char_vec: Vec<char> = text.chars().collect();
 
-                self.text_buffer[pos[0] + x][pos[1] + y] = char_vec[i].to_string();
-                self.color_buffer[pos[0] + x][pos[1] + y] = color;
+                self.text_buffer[(pos.x + x) as usize][(pos.y + y) as usize] = char_vec[i].to_string();
+                self.color_buffer[(pos.x + x) as usize][(pos.y + y) as usize] = color;
 
                 x += 1;
 
@@ -92,8 +90,8 @@ impl SubWindow {
     }
 
     pub fn clear(&mut self) {
-        for y in 0..SIZE[1] as usize {
-            for x in 0..SIZE[0] {
+        for y in 0..self.size.y as usize {
+            for x in 0..self.size.x {
                 self.text_buffer[x as usize][y as usize] = "".to_string();
                 self.color_buffer[x as usize][y as usize] = 0;
             }
@@ -131,7 +129,7 @@ pub struct Window {
 impl Window {
     pub fn new(size: Size) -> Self {
         // Terminal setup
-        execute!(stdout(), terminal::SetSize(SIZE[0] + 1, SIZE[1] + 1))
+        execute!(stdout(), terminal::SetSize(size.x + 1, size.y + 1))
             .expect("failed to set Terminal size :(");
         execute!(stdout(), cursor::Hide)
             .expect("failed to hide cursor :(");
@@ -141,8 +139,8 @@ impl Window {
             .expect("failed to move cursor");
 
         Window {
-            text_buffer: vec![vec!["  ".to_string(); SIZE[1] as usize + 1]; SIZE[0] as usize + 1], 
-            color_buffer: vec![vec![0; SIZE[1] as usize + 1]; SIZE[0] as usize + 1],
+            text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
+            color_buffer: vec![vec![0; size.y as usize + 1]; size.x as usize + 1],
             size: size,
         }
     }
@@ -219,8 +217,8 @@ impl Window {
     }
     
     pub fn clear(&mut self) {
-        for y in 0..SIZE[1] as usize {
-            for x in 0..SIZE[0] {
+        for y in 0..self.size.y as usize {
+            for x in 0..self.size.x {
                 self.text_buffer[x as usize][y as usize] = "".to_string();
                 self.color_buffer[x as usize][y as usize] = 0;
             }
