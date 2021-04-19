@@ -10,9 +10,9 @@ readme = "README.md"
 
 keywords = ["simple", "cli", "gui"]
 
-exclude = {
+exclude = [
     "pictures/*"
-}
+]
 
 edition = "2018"
 
