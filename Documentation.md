@@ -100,3 +100,4 @@ fn main() {
             .expect("failed to flush stdout :(");
 }
 ```
+![finalwindow](https://github.com/BrunoWallner/cli_gui/blob/main/pictures/final_window.png)
