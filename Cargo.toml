@@ -1,7 +1,15 @@
 [package]
 name = "cli_gui"
 version = "0.1.0"
-authors = ["luca <b.luca>"]
+authors = ["luca Biendl <b.lucab1211@gmail.com>"]
+licenes = "GPL-3.0"
+description = "A simple rust cross-platform libary designed for simple guis completely in cli"
+repository = "https://github.com/BrunoWallner/cli_gui"
+documentation = "https://github.com/BrunoWallner/cli_gui/blob/main/Documentation.md"
+readme = "README.md"
+
+keywords = ["simple", "cli", "gui"]
+
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
