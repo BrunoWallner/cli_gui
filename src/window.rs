@@ -1,6 +1,8 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+use std::{thread, time::Duration};
+
 use std::io::{self, Write, stdout, stdin};
 use crossterm::{
     execute,
@@ -9,6 +11,10 @@ use crossterm::{
     cursor,
     terminal,
 };
+use crossterm::event;
+use crossterm::event::*;
+use crossterm::terminal::enable_raw_mode;
+use crossterm::terminal::disable_raw_mode;
 
 pub struct Size {
     pub x: u16,
@@ -40,6 +46,18 @@ pub struct SubWindow {
 }
 impl SubWindow {
     pub fn new(pos: Position, size: Size) -> Self {
+        // Terminal setup
+        execute!(stdout(), terminal::SetSize(size.x + 1, size.y + 1))
+            .expect("failed to set Terminal size :(");
+        execute!(stdout(), cursor::Hide)
+            .expect("failed to hide cursor :(");
+        execute!(stdout(), terminal::EnterAlternateScreen)
+            .expect("failed to enter alternatescreen");
+        execute!(stdout(), cursor::MoveTo(0, 0))
+            .expect("failed to move cursor");
+    
+        enable_raw_mode()
+            .expect("failed to go into raw mode :(");
         SubWindow {
             text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
             color_buffer: vec![vec![0; size.y as usize + 1]; size.x as usize + 1],
@@ -92,7 +110,7 @@ impl SubWindow {
     pub fn clear(&mut self) {
         for y in 0..self.size.y as usize {
             for x in 0..self.size.x {
-                self.text_buffer[x as usize][y as usize] = "".to_string();
+                self.text_buffer[x as usize][y as usize] = " ".to_string();
                 self.color_buffer[x as usize][y as usize] = 0;
             }
         }
@@ -107,81 +125,129 @@ impl SubWindow {
         self.pos = pos;
     }
 
-    pub fn input(&self, pos: Position, output_string: &str) -> String {
+
+    pub fn read_char(&self) -> char {
+        loop {
+            if poll(Duration::from_millis(1)).expect("") {
+                if let Event::Key(KeyEvent {
+                    code: KeyCode::Char(c),
+                    ..
+                }) = event::read().expect("")
+                {
+                    return c;
+                }
+            } else {
+                return ' ';
+            }
+        }
+    }
+
+    pub fn read_line(&mut self, pos: Position, output_string: &str, write_line: bool) -> String {
         execute!(stdout(), cursor::MoveTo(pos.x + self.pos.x, pos.y + self.pos.y))
             .expect("failed to move cursor :(");
         print!("{}", output_string);
         io::stdout().flush().unwrap();
+
+        let mut line = String::new();
+        while let Event::Key(KeyEvent { code, .. }) = event::read().expect("failed to read event :(") {
+            match code {
+                KeyCode::Enter => {
+                    break;
+                },
+                KeyCode::Backspace => {
+                    line.pop();
+                    if write_line {
+                        let line_vec: Vec<char> = line.chars().collect();
+                        let x = (pos.x + self.pos.x) as usize + line_vec.len() + output_string.len();
+                        let y = (pos.y + self.pos.y)  as usize;
+                        
+                        // writes to window
+                        //self.write(Position::new(x as u16, y as u16), "#".to_string(), 2);
+                        //self.render();
+                        execute!(stdout(), cursor::MoveTo(x as u16, y as u16))
+                            .expect("failed to move cursor :(");
+                        print!(" ");
+                        io::stdout().flush().unwrap();
+                    }
+                }
+                KeyCode::Char(c) => {
+                    line.push(c);
+
+                    if write_line {
+                        print!("{}", c.to_string());
+                        io::stdout().flush().unwrap();
+                    }
+                },
+                _ => {}
+            }
+        }
     
-        let mut input_string = String::new();
-        stdin().read_line(&mut input_string)
-            .ok()
-            .expect("Failed to read line");
-        return input_string.trim().to_string();
+        return line;
     }
-}
 
-pub struct Window {
-    text_buffer: Vec<Vec<String>>,
-    color_buffer: Vec<Vec<u8>>,
-    size: Size,
-}
-impl Window {
-    pub fn new(size: Size) -> Self {
-        // Terminal setup
-        execute!(stdout(), terminal::SetSize(size.x + 1, size.y + 1))
-            .expect("failed to set Terminal size :(");
-        execute!(stdout(), cursor::Hide)
-            .expect("failed to hide cursor :(");
-        execute!(stdout(), terminal::EnterAlternateScreen)
-            .expect("failed to enter alternatescreen");
-        execute!(stdout(), cursor::MoveTo(0, 0))
-            .expect("failed to move cursor");
+    pub fn render(&mut self) {
+        for y in 0..self.size.y {
+            for x in 0..self.size.x {
 
-        Window {
-            text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
-            color_buffer: vec![vec![0; size.y as usize + 1]; size.x as usize + 1],
-            size: size,
+                if x < self.size.x && y < self.size.y {
+
+                    let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
+
+                    let mut stdout = stdout();
+
+                    execute!(stdout, cursor::MoveTo(x + self.pos.x,y + self.pos.y))
+                        .expect("failed to move cursor :(");
+                    match self.color_buffer[x as usize][y as usize] {
+                        0 => execute!(stdout, style::PrintStyledContent( text_slice.white())),
+                        1 => execute!(stdout, style::PrintStyledContent( text_slice.red())),
+                        2 => execute!(stdout, style::PrintStyledContent( text_slice.green())),
+                        3 => execute!(stdout, style::PrintStyledContent( text_slice.blue())),
+                        4 => execute!(stdout, style::PrintStyledContent( text_slice.cyan())),
+                        5 => execute!(stdout, style::PrintStyledContent( text_slice.magenta())),
+                        _ => execute!(stdout, style::PrintStyledContent( "??".red())),
+                    }.expect("failed to render buffer :(");
+                }
+            }
         }
     }
 
-    pub fn write_window(&mut self, window: &SubWindow) {
-        for y in 0..window.size.y {
-            for x in 0..window.size.x {
-                if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y {
-                    self.text_buffer[ (x + window.pos.x) as usize ][ (y + window.pos.y) as usize] = window.text_buffer[x as usize][y as usize].clone();
-                    self.color_buffer[ (x + window.pos.x) as usize ][ (y + window.pos.y) as usize] = window.color_buffer[x as usize][y as usize];
+    pub fn decorate(&mut self) {
+        for y in 0..self.size.y {
+            for x in 0..self.size.x {
 
-                    // Window Borders
+                if x < self.size.x && y < self.size.y {
+
+                    // self Borders
                     if x == 0 {
-                        self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.border_symbols[0].clone();
-                        self.color_buffer[ (x + window.pos.x) as usize ][ (y + window.pos.y) as usize ] = window.border_color;
+                        self.text_buffer[x as usize][y as usize] = self.border_symbols[0].clone();
+                        self.color_buffer[x as usize ][y as usize ] = self.border_color;
                     }
-                    if x == window.size.x - 1 {
-                        self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.border_symbols[1].clone();
-                        self.color_buffer[ (x + window.pos.x) as usize ][ (y + window.pos.y) as usize ] = window.border_color;
+                    if x == self.size.x - 1 {
+                        self.text_buffer[x as usize][y as usize] = self.border_symbols[1].clone();
+                        self.color_buffer[x as usize ][y as usize ] = self.border_color;
                     }
                     if y == 0 {
-                        self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.border_symbols[2].clone();
-                        self.color_buffer[ (x + window.pos.x) as usize ][ (y + window.pos.y) as usize ] = window.border_color;
+                        self.text_buffer[x as usize][y as usize] = self.border_symbols[2].clone();
+                        self.color_buffer[x as usize ][y as usize ] = self.border_color;
                     }
-                    if y == window.size.y - 1 {
-                        self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.border_symbols[3].clone();
-                        self.color_buffer[ (x + window.pos.x) as usize ][ (y + window.pos.y) as usize ] = window.border_color;
+                    if y == self.size.y - 1 {
+                        self.text_buffer[x as usize][y as usize] = self.border_symbols[3].clone();
+                        self.color_buffer[x as usize ][y as usize ] = self.border_color;
                     }
 
-                    // Window Title
+
+                    // self Title
                     let mut y_title = 0;
                     let mut x_title = 0;
-                    let pos: [u16; 2] = [window.size.x / 2 - (window.title.len() / 2 + 1) as u16 + window.pos.x, 1 + window.pos.y];
+                    let pos: [u16; 2] = [self.size.x / 2 - (self.title.len() / 2 + 1) as u16, 1];
 
-                    let char_vec: Vec<char> = window.title.chars().collect();
+                    let char_vec: Vec<char> = self.title.chars().collect();
                     for i in 0..char_vec.len() as usize {
                         // checks if position is valid and corrects it if neccessary
                         if pos[0] + x < self.size.x && pos[1] < self.size.y {
             
                             self.text_buffer[(pos[0] + x_title) as usize][(pos[1] + y_title) as usize] = char_vec[i].to_string();
-                            self.color_buffer[(pos[0] + x_title) as usize][(pos[1] + y_title) as usize] = window.title_color;
+                            self.color_buffer[(pos[0] + x_title) as usize][(pos[1] + y_title) as usize] = self.title_color;
             
                             x_title += 1;
                             
@@ -196,47 +262,25 @@ impl Window {
         }
     }
 
-    pub fn render(&self) {
-        for y in 0..self.size.y {
-            for x in 0..self.size.x {
-                let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
-
-                let mut stdout = stdout();
-                match self.color_buffer[x as usize][y as usize] {
-                    0 => execute!(stdout, cursor::MoveTo(x,y), style::PrintStyledContent( text_slice.white())),
-                    1 => execute!(stdout, cursor::MoveTo(x,y), style::PrintStyledContent( text_slice.red())),
-                    2 => execute!(stdout, cursor::MoveTo(x,y), style::PrintStyledContent( text_slice.green())),
-                    3 => execute!(stdout, cursor::MoveTo(x,y), style::PrintStyledContent( text_slice.blue())),
-                    4 => execute!(stdout, cursor::MoveTo(x,y), style::PrintStyledContent( text_slice.cyan())),
-                    5 => execute!(stdout, cursor::MoveTo(x,y), style::PrintStyledContent( text_slice.magenta())),
-                    _ => execute!(stdout, cursor::MoveTo(x,y), style::PrintStyledContent( "??".red())),
-                }.expect("failed to render buffer :(");
-
-            }
-        }
-    }
-    
-    pub fn clear(&mut self) {
-        for y in 0..self.size.y as usize {
-            for x in 0..self.size.x {
-                self.text_buffer[x as usize][y as usize] = "".to_string();
-                self.color_buffer[x as usize][y as usize] = 0;
-            }
-        }
-        execute!(stdout(), terminal::Clear(terminal::ClearType::All)).
-            expect("failed to clear Terminal");
-    }
-
-    pub fn move_cursor(&self, pos: Position) {
-        execute!(stdout(), cursor::MoveTo(pos.x,pos.y))
-            .expect("failed to move cursor");
-    }
-
     pub fn quit(&self) {
         self.move_cursor(Position::new(0, 0));
         execute!(stdout(), terminal::LeaveAlternateScreen)
             .expect("failed to leave alternatescreen :(");
         stdout().flush()
             .expect("failed to flush stdout :(");
+        disable_raw_mode()
+            .expect("failed to leave raw mode :(");    
+    }
+
+
+    pub fn write_window(&mut self, window: &SubWindow) {
+        for y in 0..window.size.y {
+            for x in 0..window.size.x {
+                if x + window.pos.x < self.size.x && y + window.pos.x < self.size.x {
+                    self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.text_buffer[x as usize][y as usize].clone();
+                    self.color_buffer[(x + window.pos.x)as usize][(y + window.pos.y) as usize] = window.color_buffer[x as usize][y as usize].clone();
+                }
+            }
+        }
     }
 }
