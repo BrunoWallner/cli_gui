@@ -55,11 +55,11 @@ impl SubWindow {
     pub fn write(&mut self, pos: Position, text: String, color: u8) {
         let mut y = 0;
         let mut x = 0;
-        for i in 0..text.len() as usize {
+
+        let char_vec: Vec<char> = text.chars().collect();
+        for i in 0..char_vec.len() as usize {
             // checks if position is valid and corrects it if neccessary
             if pos.x + x < self.size.x && pos.y < self.size.y {
-
-                let char_vec: Vec<char> = text.chars().collect();
 
                 self.text_buffer[(pos.x + x) as usize][(pos.y + y) as usize] = char_vec[i].to_string();
                 self.color_buffer[(pos.x + x) as usize][(pos.y + y) as usize] = color;
@@ -174,11 +174,11 @@ impl Window {
                     let mut y_title = 0;
                     let mut x_title = 0;
                     let pos: [u16; 2] = [window.size.x / 2 - (window.title.len() / 2 + 1) as u16 + window.pos.x, 1 + window.pos.y];
-                    for i in 0..window.title.len() as usize {
+
+                    let char_vec: Vec<char> = window.title.chars().collect();
+                    for i in 0..char_vec.len() as usize {
                         // checks if position is valid and corrects it if neccessary
                         if pos[0] + x < self.size.x && pos[1] < self.size.y {
-            
-                            let char_vec: Vec<char> = window.title.chars().collect();
             
                             self.text_buffer[(pos[0] + x_title) as usize][(pos[1] + y_title) as usize] = char_vec[i].to_string();
                             self.color_buffer[(pos[0] + x_title) as usize][(pos[1] + y_title) as usize] = window.title_color;
