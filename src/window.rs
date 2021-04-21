@@ -6,7 +6,6 @@ use std::{thread, time::Duration};
 use std::io::{self, Write, stdout, stdin};
 use crossterm::{
     execute,
-    style::{self, Colorize},
     Result,
     cursor,
     terminal,
@@ -16,61 +15,51 @@ use crossterm::event::*;
 use crossterm::terminal::enable_raw_mode;
 use crossterm::terminal::disable_raw_mode;
 
-pub struct Size {
-    pub x: u16,
-    pub y: u16,
-} impl Size {
-    pub fn new(x: u16, y: u16) ->  Self {
-        Size {x: x, y: y}
-    }
-}
+use colored::Colorize;
 
-pub struct Position {
-    pub x: u16,
-    pub y: u16,
-} impl Position {
-    pub fn new(x: u16, y: u16) ->  Self {
-        Position {x: x, y: y}
-    }
-}
+use crate::Position;
+use crate::Size;
+use crate::Color;
 
-pub struct SubWindow {
+pub struct Window {
     text_buffer: Vec<Vec<String>>,
-    color_buffer: Vec<Vec<u8>>,
+    color_buffer: Vec<Vec<Color>>,
     pub size: Size,
     pub pos: Position,
-    border_color: u8,
+    border_color: Color,
     border_symbols: [String; 4],
     title: String,
-    title_color: u8,
+    title_color: Color,
 }
-impl SubWindow {
+impl Window {
     pub fn new(pos: Position, size: Size) -> Self {
-        // Terminal setup
-        execute!(stdout(), terminal::SetSize(size.x + 1, size.y + 1))
-            .expect("failed to set Terminal size :(");
-        execute!(stdout(), cursor::Hide)
-            .expect("failed to hide cursor :(");
-        execute!(stdout(), terminal::EnterAlternateScreen)
-            .expect("failed to enter alternatescreen");
-        execute!(stdout(), cursor::MoveTo(0, 0))
-            .expect("failed to move cursor");
-    
-        enable_raw_mode()
-            .expect("failed to go into raw mode :(");
-        SubWindow {
+        Window {
             text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
-            color_buffer: vec![vec![0; size.y as usize + 1]; size.x as usize + 1],
+            color_buffer: vec![vec![Color::new(0, 0, 0); size.y as usize + 1]; size.x as usize + 1],
             size: size,
             pos: pos,
-            border_color: 0,
+            border_color: Color::new(0, 0, 0),
             border_symbols: ["▏".to_string(), "▕".to_string(), "▁".to_string(), "▔".to_string()],
             title: "title".to_string(),
-            title_color: 0,
+            title_color: Color::new(0, 0, 0),
         }
     }
 
-    pub fn write(&mut self, pos: Position, text: String, color: u8) {
+    pub fn set_to_main(&self) {
+            // Terminal setup
+            execute!(stdout(), terminal::SetSize(self.size.x + 1, self.size.y + 1))
+                .expect("failed to set Terminal size :(");
+            execute!(stdout(), cursor::Hide)
+                .expect("failed to hide cursor :(");
+            execute!(stdout(), terminal::EnterAlternateScreen)
+                .expect("failed to enter alternatescreen");
+            execute!(stdout(), cursor::MoveTo(0, 0))
+                .expect("failed to move cursor");
+            enable_raw_mode()
+                .expect("failed to go into raw mode :(");
+    }
+
+    pub fn write(&mut self, pos: Position, text: String, color: Color) {
         let mut y = 0;
         let mut x = 0;
 
@@ -93,7 +82,7 @@ impl SubWindow {
         }      
     }
 
-    pub fn set_border_color(&mut self, color: u8) {
+    pub fn set_border_color(&mut self, color: Color) {
         self.border_color = color;
     }
     pub fn set_border_symbols(&mut self, symbols: [String; 4]) {
@@ -103,7 +92,7 @@ impl SubWindow {
     pub fn set_title(&mut self, title: String) {
         self.title = title;
     }
-    pub fn set_title_color(&mut self, color: u8) {
+    pub fn set_title_color(&mut self, color: Color) {
         self.title_color = color;
     }
 
@@ -111,7 +100,7 @@ impl SubWindow {
         for y in 0..self.size.y as usize {
             for x in 0..self.size.x {
                 self.text_buffer[x as usize][y as usize] = " ".to_string();
-                self.color_buffer[x as usize][y as usize] = 0;
+                self.color_buffer[x as usize][y as usize] = Color::new(0, 0, 0);
             }
         }
     }
@@ -192,23 +181,17 @@ impl SubWindow {
                 if x < self.size.x && y < self.size.y {
 
                     let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
+                    let color = self.color_buffer[x as usize][y as usize].clone();
 
                     let mut stdout = stdout();
 
                     execute!(stdout, cursor::MoveTo(x + self.pos.x,y + self.pos.y))
                         .expect("failed to move cursor :(");
-                    match self.color_buffer[x as usize][y as usize] {
-                        0 => execute!(stdout, style::PrintStyledContent( text_slice.white())),
-                        1 => execute!(stdout, style::PrintStyledContent( text_slice.red())),
-                        2 => execute!(stdout, style::PrintStyledContent( text_slice.green())),
-                        3 => execute!(stdout, style::PrintStyledContent( text_slice.blue())),
-                        4 => execute!(stdout, style::PrintStyledContent( text_slice.cyan())),
-                        5 => execute!(stdout, style::PrintStyledContent( text_slice.magenta())),
-                        _ => execute!(stdout, style::PrintStyledContent( "??".red())),
-                    }.expect("failed to render buffer :(");
+                    print!("{}", text_slice.truecolor(color.r, color.g, color.b));
                 }
             }
         }
+        io::stdout().flush().unwrap();
     }
 
     pub fn decorate(&mut self) {
@@ -273,7 +256,7 @@ impl SubWindow {
     }
 
 
-    pub fn write_window(&mut self, window: &SubWindow) {
+    pub fn write_window(&mut self, window: &Window) {
         for y in 0..window.size.y {
             for x in 0..window.size.x {
                 if x + window.pos.x < self.size.x && y + window.pos.x < self.size.x {
