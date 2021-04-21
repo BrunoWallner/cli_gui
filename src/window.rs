@@ -140,12 +140,18 @@ impl Window {
         while let Event::Key(KeyEvent { code, .. }) = event::read().expect("failed to read event :(") {
             match code {
                 KeyCode::Char(c) => {
-                    line.push(c);
-
                     if write_line {
+                        let output_vec: Vec<char> = output_string.chars().collect();
+                        let line_vec: Vec<char> = line.chars().collect();
+
+                        let x = (pos.x + self.pos.x) as usize + line_vec.len() + output_vec.len();
+                        let y = (pos.y + self.pos.y)  as usize;
+                        self.move_cursor(Position::new(x as u16, y as u16));
+
                         print!("{}", c.to_string().truecolor(color.r, color.g, color.b));
                         io::stdout().flush().unwrap();
                     }
+                    line.push(c);
                 },
                 KeyCode::Enter => {
                     break;
@@ -154,15 +160,16 @@ impl Window {
                     if write_line {
                         let output_vec: Vec<char> = output_string.chars().collect();
                         let line_vec: Vec<char> = line.chars().collect();
+
                         let x = (pos.x + self.pos.x) as usize + line_vec.len() + output_vec.len() - 1;
                         let y = (pos.y + self.pos.y)  as usize;
                         
                         execute!(stdout(), cursor::MoveTo(x as u16, y as u16))
                             .expect("failed to move cursor :(");
-                        print!(" ");
+                        print!("_");
                         io::stdout().flush().unwrap();
-                        line.pop();
                     }
+                    line.pop();
                 }
                 _ => {}
             }
