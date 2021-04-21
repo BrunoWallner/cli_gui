@@ -1,5 +1,4 @@
 # cli_gui
-
 ### A simple rust cross-platform libary designed for simple guis completely in cli
 ![finalwindow](https://github.com/BrunoWallner/cli_gui/blob/main/pictures/final_window.png)
 - cross platform
