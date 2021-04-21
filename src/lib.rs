@@ -29,3 +29,12 @@ pub struct Color {
         Color {r: r, g: g, b: b}
     }
 }
+
+use crossterm::execute;
+use crossterm::terminal;
+use std::io::stdout;
+
+pub fn clear_terminal() {
+    execute!(stdout(), terminal::Clear(terminal::ClearType::All)).
+    expect("failed to clear Terminal");
+}

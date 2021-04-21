@@ -130,42 +130,40 @@ impl Window {
         }
     }
 
-    pub fn read_line(&mut self, pos: Position, output_string: &str, write_line: bool) -> String {
+    pub fn read_line(&mut self, pos: Position, output_string: &str, color: Color, write_line: bool) -> String {
         execute!(stdout(), cursor::MoveTo(pos.x + self.pos.x, pos.y + self.pos.y))
             .expect("failed to move cursor :(");
-        print!("{}", output_string);
+        print!("{}", output_string.truecolor(color.r, color.g, color.b));
         io::stdout().flush().unwrap();
 
         let mut line = String::new();
         while let Event::Key(KeyEvent { code, .. }) = event::read().expect("failed to read event :(") {
             match code {
-                KeyCode::Enter => {
-                    break;
-                },
-                KeyCode::Backspace => {
-                    line.pop();
-                    if write_line {
-                        let line_vec: Vec<char> = line.chars().collect();
-                        let x = (pos.x + self.pos.x) as usize + line_vec.len() + output_string.len();
-                        let y = (pos.y + self.pos.y)  as usize;
-                        
-                        // writes to window
-                        //self.write(Position::new(x as u16, y as u16), "#".to_string(), 2);
-                        //self.render();
-                        execute!(stdout(), cursor::MoveTo(x as u16, y as u16))
-                            .expect("failed to move cursor :(");
-                        print!(" ");
-                        io::stdout().flush().unwrap();
-                    }
-                }
                 KeyCode::Char(c) => {
                     line.push(c);
 
                     if write_line {
-                        print!("{}", c.to_string());
+                        print!("{}", c.to_string().truecolor(color.r, color.g, color.b));
                         io::stdout().flush().unwrap();
                     }
                 },
+                KeyCode::Enter => {
+                    break;
+                },
+                KeyCode::Backspace => {
+                    if write_line {
+                        let output_vec: Vec<char> = output_string.chars().collect();
+                        let line_vec: Vec<char> = line.chars().collect();
+                        let x = (pos.x + self.pos.x) as usize + line_vec.len() + output_vec.len() - 1;
+                        let y = (pos.y + self.pos.y)  as usize;
+                        
+                        execute!(stdout(), cursor::MoveTo(x as u16, y as u16))
+                            .expect("failed to move cursor :(");
+                        print!(" ");
+                        io::stdout().flush().unwrap();
+                        line.pop();
+                    }
+                }
                 _ => {}
             }
         }
@@ -182,10 +180,11 @@ impl Window {
                     let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
                     let color = self.color_buffer[x as usize][y as usize].clone();
 
+                   self.move_cursor(Position::new(x + self.pos.x, y + self.pos.y)); // performance bummer!
+
                     print!("{}", text_slice.truecolor(color.r, color.g, color.b));
                 }
             }
-            print!("\n");
         }
         io::stdout().flush().unwrap();
     }
