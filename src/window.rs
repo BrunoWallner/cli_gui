@@ -77,7 +77,6 @@ impl Window {
                     y += 1;
                     x = 0;
                 }
-
             }          
         }      
     }
@@ -183,13 +182,10 @@ impl Window {
                     let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
                     let color = self.color_buffer[x as usize][y as usize].clone();
 
-                    let mut stdout = stdout();
-
-                    execute!(stdout, cursor::MoveTo(x + self.pos.x,y + self.pos.y))
-                        .expect("failed to move cursor :(");
                     print!("{}", text_slice.truecolor(color.r, color.g, color.b));
                 }
             }
+            print!("\n");
         }
         io::stdout().flush().unwrap();
     }
