@@ -166,7 +166,7 @@ impl Window {
                         
                         execute!(stdout(), cursor::MoveTo(x as u16, y as u16))
                             .expect("failed to move cursor :(");
-                        print!("_");
+                        print!(" ");
                         io::stdout().flush().unwrap();
                     }
                     line.pop();
