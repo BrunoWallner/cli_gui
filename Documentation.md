@@ -2,23 +2,25 @@
 If you want to create a empty window you can do that like that:
 
 ```Rust
-use std::io::{Write, stdout};
 use cli_gui::*;
 
 fn main() {
-        // creates main window
-        let mut window = Window::new(Size::new(120, 45)); // <-- Size
+    // creates main window
+    let mut window = Window::new(Position::new(1, 0), Size::new(100, 50));
+    window.set_to_main();
 
-        // creates sub window
-        let mut login_window = SubWindow::new(Position::new(35, 15), Size::new(50, 15));
+    // writes text to window
+    window.write(Position::new(5, 5), "Hello".to_string(), Color::new(100, 255, 50));
 
-        // draws sub window into main window
-        window.write_window(&login_window);
+    // decorates window with title and borders
+    window.decorate();
 
-        // renders main window
-        window.render();
-        stdout().flush()
-            .expect("failed to flush stdout :(");
+    // renders window to terminal
+    window.render();
+    
+    // halts the programm to then quit
+    window.read_line(Position::new(10, 10), "input: ", Color::new(100, 100, 100), true);
+    window.quit();
 }
 ```
 ![emptywindow](https://github.com/BrunoWallner/cli_gui/blob/main/pictures/empty_window.png)
@@ -26,78 +28,51 @@ fn main() {
 You can customize it like this:
 
 ```Rust
-login_window.set_border_color(1); // <- sets border color
-login_window.set_title("Login".to_string()); // <- sets title of sub window
-login_window.set_title_color(5); // <- sets title color
-login_window.move_window(Position::new(12, 3)); // <- moves the window
+window.set_border_color(Color::new(0, 255, 0));
+window.set_title("Window".to_string());
 ```
 ![customizedwindow](https://github.com/BrunoWallner/cli_gui/blob/main/pictures/customized_window.png)
-Make sure that you do this befor writing the sub window into the main window ( window.write_window(&login_window) )!
+Make sure that you do this before you use window.decorate()!
 
 Or you can write text into the window like:
 ```Rust
-login_window.write(Position::new(5, 5), "Moin Meister".to_string(), 3);
-login_window.write(Position::new(25, 9), "Test".to_string(), 0);
+window.write(Position::new(5, 5), "Hello".to_string(), Color::new(100, 255, 50));
 ```
+Later it even will be possible to draw lines.
 
 You can even read user input from a sub window
 ```Rust
-let input = login_window.input(Position::new(7, 10), "input: ");
+// reads line, blocking
+input = window.read_line(Position::new(10, 10), "input: ", Color::new(100, 100, 100), true);
+
+// reads char if one is pressed, waits 1ms everytime for keypress when this functions is called
+input = window.read_char();
 ```
 
-Make sure you do this after rendering the main window because input() is blocking :(
-
-you can clear the window with window.clear()
-
-## Color-codes
-number	| color
-------	| ------
-0	| white
-1	| red
-2	| green
-3	| blue
-4	| cyan
-5	| magenta
-
-there will be more available in later releases
+you can clear the window with window.clear() and the entire terminal with clear_terminal()
 
 Here is the enitre code:
 ```Rust
-use std::io::{Write, stdout};
-use cli_gui::*;
+    // creates main window
+    let mut window = Window::new(Position::new(1, 0), Size::new(100, 50));
+    window.set_to_main();
 
-fn main() {
-        // creates main window
-        let mut window = Window::new(Size::new(120, 45));
+    // writes text to window
+    window.write(Position::new(5, 5), "Hello".to_string(), Color::new(100, 255, 50));
 
-        // creates sub window
-        let mut login_window = SubWindow::new(Position::new(35, 15), Size::new(50, 15));
+    // decorates the window
+    window.set_border_color(Color::new(0, 255, 0));
+    window.set_title("Window".to_string());
+    
+    // decorates window with title and borders
+    window.decorate();
 
-        // draws sub window into main window
-        login_window.set_border_color(1); // <- sets border color
-        login_window.set_title("Login".to_string()); // <- sets title of sub window
-        login_window.set_title_color(5); // <- sets title color
-        login_window.move_window(Position::new(12, 3)); // <- moves the window
+    // renders window to terminal
+    window.render();
 
-        login_window.write(Position::new(5, 5), "Moin Meister".to_string(), 3);
-        login_window.write(Position::new(25, 9), "Test".to_string(), 0);
-
-        window.write_window(&login_window);
-
-        // renders main window
-        window.render();
-        stdout().flush()
-            .expect("failed to flush stdout :(");
-
-        let input = login_window.input(Position::new(7, 10), "input: ");
-        login_window.write(Position::new(20, 5), input, 3);
-        window.write_window(&login_window);
-
-
-        // renders main window
-        window.render();
-        stdout().flush()
-            .expect("failed to flush stdout :(");
+    // halts the programm
+    window.read_line(Position::new(10, 10), "input: ", Color::new(100, 100, 100), true);
+    window.quit();
 }
 ```
 ![finalwindow](https://github.com/BrunoWallner/cli_gui/blob/main/pictures/final_window.png)
