@@ -38,10 +38,10 @@ impl Window {
             color_buffer: vec![vec![Color::new(0, 0, 0); size.y as usize + 1]; size.x as usize + 1],
             size: size,
             pos: pos,
-            border_color: Color::new(0, 0, 0),
+            border_color: Color::new(255, 255, 255),
             border_symbols: ["▏".to_string(), "▕".to_string(), "▁".to_string(), "▔".to_string()],
             title: "title".to_string(),
-            title_color: Color::new(0, 0, 0),
+            title_color: Color::new(255, 255, 255),
         }
     }
 
