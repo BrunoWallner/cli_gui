@@ -20,10 +20,12 @@ use colored::Colorize;
 use crate::Position;
 use crate::Size;
 use crate::Color;
+use crate::Terminal;
+
 
 pub struct Window {
-    text_buffer: Vec<Vec<String>>,
-    color_buffer: Vec<Vec<Color>>,
+    pub text_buffer: Vec<Vec<String>>,
+    pub color_buffer: Vec<Vec<Color>>,
     pub size: Size,
     pub pos: Position,
     border_color: Color,
@@ -43,20 +45,6 @@ impl Window {
             title: "title".to_string(),
             title_color: Color::new(255, 255, 255),
         }
-    }
-
-    pub fn set_to_main(&self) {
-            // Terminal setup
-            execute!(stdout(), terminal::SetSize(self.size.x, self.size.y))
-                .expect("failed to set Terminal size :(");
-            execute!(stdout(), cursor::Hide)
-                .expect("failed to hide cursor :(");
-            execute!(stdout(), terminal::EnterAlternateScreen)
-                .expect("failed to enter alternatescreen");
-            execute!(stdout(), cursor::MoveTo(0, 0))
-                .expect("failed to move cursor");
-            enable_raw_mode()
-                .expect("failed to go into raw mode :(");
     }
 
     pub fn write(&mut self, pos: Position, text: String, color: Color) {
@@ -94,6 +82,9 @@ impl Window {
     pub fn set_title_color(&mut self, color: Color) {
         self.title_color = color;
     }
+    pub fn resize(&mut self, size: Size) {
+        self.size = size;
+    }
 
     pub fn clear(&mut self) {
         for y in 0..self.size.y as usize {
@@ -104,114 +95,8 @@ impl Window {
         }
     }
 
-    pub fn move_cursor(&self, pos: Position) {
-        execute!(stdout(), cursor::MoveTo(pos.x,pos.y))
-            .expect("failed to move cursor");
-    }
-
     pub fn move_window(&mut self, pos: Position) {
         self.pos = pos;
-    }
-
-
-    pub fn read_char(&self) -> char {
-        loop {
-            if poll(Duration::from_millis(0)).expect("") {
-                if let Event::Key(KeyEvent {
-                    code: KeyCode::Char(c),
-                    ..
-                }) = event::read().expect("")
-                {
-                    return c;
-                }
-                else {
-                return ' ';
-                }
-            } else {
-                return ' ';
-            }
-        }
-    }
-    
-    pub fn pressed_key(&self) -> KeyCode {
-    	loop {
-            if poll(Duration::from_millis(0)).expect("") {
-                if let Event::Key(KeyEvent { code: keycode, .. }) = event::read().expect("")
-                {
-                    return keycode;
-                }
-                else {
-                	return KeyCode::Char(' ');
-                }
-            } else {
-            	return KeyCode::Char(' ');
-            }
-        }
-    }
-
-    pub fn read_line(&mut self, pos: Position, output_string: &str, color: Color, write_line: bool) -> String {
-        execute!(stdout(), cursor::MoveTo(pos.x + self.pos.x, pos.y + self.pos.y))
-            .expect("failed to move cursor :(");
-        print!("{}", output_string.truecolor(color.r, color.g, color.b));
-        io::stdout().flush().unwrap();
-
-        let mut line = String::new();
-        while let Event::Key(KeyEvent { code, .. }) = event::read().expect("failed to read event :(") {
-            match code {
-                KeyCode::Char(c) => {
-                    if write_line {
-                        let output_vec: Vec<char> = output_string.chars().collect();
-                        let line_vec: Vec<char> = line.chars().collect();
-
-                        let x = (pos.x + self.pos.x) as usize + line_vec.len() + output_vec.len();
-                        let y = (pos.y + self.pos.y)  as usize;
-                        self.move_cursor(Position::new(x as u16, y as u16));
-
-                        print!("{}", c.to_string().truecolor(color.r, color.g, color.b));
-                        io::stdout().flush().unwrap();
-                    }
-                    line.push(c);
-                },
-                KeyCode::Enter => {
-                    break;
-                },
-                KeyCode::Backspace => {
-                    if write_line {
-                        let output_vec: Vec<char> = output_string.chars().collect();
-                        let line_vec: Vec<char> = line.chars().collect();
-
-                        let x = (pos.x + self.pos.x) as usize + line_vec.len() + output_vec.len() - 1;
-                        let y = (pos.y + self.pos.y)  as usize;
-                        
-                        execute!(stdout(), cursor::MoveTo(x as u16, y as u16))
-                            .expect("failed to move cursor :(");
-                        print!(" ");
-                        io::stdout().flush().unwrap();
-                    }
-                    line.pop();
-                }
-                _ => {}
-            }
-        }
-    
-        return line;
-    }
-
-    pub fn render(&mut self) {
-        for y in 0..self.size.y {
-        	self.move_cursor(Position::new(self.pos.x, y + self.pos.y)); // performance bummer!
-            for x in 0..self.size.x {
-
-                if x < self.size.x && y < self.size.y {
-
-                    let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
-                    let color = self.color_buffer[x as usize][y as usize].clone();
-
-                    print!("{}", text_slice.truecolor(color.r, color.g, color.b));
-                }
-            }
-        }
-        io::stdout().flush().unwrap();
     }
 
     pub fn decorate(&mut self) {
@@ -264,17 +149,6 @@ impl Window {
             }
         }
     }
-
-    pub fn quit(&self) {
-        self.move_cursor(Position::new(0, 0));
-        execute!(stdout(), terminal::LeaveAlternateScreen)
-            .expect("failed to leave alternatescreen :(");
-        stdout().flush()
-            .expect("failed to flush stdout :(");
-        disable_raw_mode()
-            .expect("failed to leave raw mode :(");    
-    }
-
 
     pub fn write_window(&mut self, window: &Window) {
         for y in 0..window.size.y {

@@ -1,9 +1,14 @@
 mod window;
+mod terminal;
+
 pub use window::*;
+pub use terminal::*;
 
 pub use crossterm::event::KeyCode;
+pub use crossterm::event::KeyEvent;
 pub use crossterm::event::KeyModifiers;
 
+#[derive(Copy, Clone)]
 pub struct Size {
     pub x: u16,
     pub y: u16,
@@ -13,6 +18,7 @@ pub struct Size {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Position {
     pub x: u16,
     pub y: u16,
@@ -33,13 +39,4 @@ pub struct Color {
     }
 }
 
-use std::io::stdout;
-use crossterm::execute;
-use crossterm::terminal;
-
-
-pub fn clear_terminal() {
-    execute!(stdout(), terminal::Clear(terminal::ClearType::All)).
-    expect("failed to clear Terminal");
-}
 
