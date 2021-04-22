@@ -39,7 +39,7 @@ impl Window {
             size: size,
             pos: pos,
             border_color: Color::new(255, 255, 255),
-            border_symbols: ["▏".to_string(), "▕".to_string(), "▁".to_string(), "▔".to_string()],
+            border_symbols: ["█".to_string(), "█".to_string(), "█".to_string(), "█".to_string()],
             title: "title".to_string(),
             title_color: Color::new(255, 255, 255),
         }
@@ -47,7 +47,7 @@ impl Window {
 
     pub fn set_to_main(&self) {
             // Terminal setup
-            execute!(stdout(), terminal::SetSize(self.size.x + 1, self.size.y + 1))
+            execute!(stdout(), terminal::SetSize(self.size.x, self.size.y))
                 .expect("failed to set Terminal size :(");
             execute!(stdout(), cursor::Hide)
                 .expect("failed to hide cursor :(");
@@ -116,7 +116,7 @@ impl Window {
 
     pub fn read_char(&self) -> char {
         loop {
-            if poll(Duration::from_millis(1)).expect("") {
+            if poll(Duration::from_millis(0)).expect("") {
                 if let Event::Key(KeyEvent {
                     code: KeyCode::Char(c),
                     ..
@@ -124,8 +124,27 @@ impl Window {
                 {
                     return c;
                 }
+                else {
+                return ' ';
+                }
             } else {
                 return ' ';
+            }
+        }
+    }
+    
+    pub fn pressed_key(&self) -> KeyCode {
+    	loop {
+            if poll(Duration::from_millis(0)).expect("") {
+                if let Event::Key(KeyEvent { code: keycode, .. }) = event::read().expect("")
+                {
+                    return keycode;
+                }
+                else {
+                	return KeyCode::Char(' ');
+                }
+            } else {
+            	return KeyCode::Char(' ');
             }
         }
     }
@@ -180,14 +199,13 @@ impl Window {
 
     pub fn render(&mut self) {
         for y in 0..self.size.y {
+        	self.move_cursor(Position::new(self.pos.x, y + self.pos.y)); // performance bummer!
             for x in 0..self.size.x {
 
                 if x < self.size.x && y < self.size.y {
 
                     let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
                     let color = self.color_buffer[x as usize][y as usize].clone();
-
-                   self.move_cursor(Position::new(x + self.pos.x, y + self.pos.y)); // performance bummer!
 
                     print!("{}", text_slice.truecolor(color.r, color.g, color.b));
                 }
@@ -224,7 +242,7 @@ impl Window {
                     // self Title
                     let mut y_title = 0;
                     let mut x_title = 0;
-                    let pos: [u16; 2] = [self.size.x / 2 - (self.title.len() / 2 + 1) as u16, 1];
+                    let pos: [u16; 2] = [self.size.x / 2 - (self.title.len() / 2) as u16, 1];
 
                     let char_vec: Vec<char> = self.title.chars().collect();
                     for i in 0..char_vec.len() as usize {
@@ -261,9 +279,9 @@ impl Window {
     pub fn write_window(&mut self, window: &Window) {
         for y in 0..window.size.y {
             for x in 0..window.size.x {
-                if x + window.pos.x < self.size.x && y + window.pos.x < self.size.x {
+                if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y {
                     self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.text_buffer[x as usize][y as usize].clone();
-                    self.color_buffer[(x + window.pos.x)as usize][(y + window.pos.y) as usize] = window.color_buffer[x as usize][y as usize].clone();
+                    self.color_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.color_buffer[x as usize][y as usize].clone();
                 }
             }
         }

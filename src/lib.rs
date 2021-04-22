@@ -1,6 +1,9 @@
 mod window;
 pub use window::*;
 
+pub use crossterm::event::KeyCode;
+pub use crossterm::event::KeyModifiers;
+
 pub struct Size {
     pub x: u16,
     pub y: u16,
@@ -30,11 +33,13 @@ pub struct Color {
     }
 }
 
+use std::io::stdout;
 use crossterm::execute;
 use crossterm::terminal;
-use std::io::stdout;
+
 
 pub fn clear_terminal() {
     execute!(stdout(), terminal::Clear(terminal::ClearType::All)).
     expect("failed to clear Terminal");
 }
+
