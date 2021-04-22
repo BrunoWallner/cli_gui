@@ -10,6 +10,7 @@ use crossterm::event;
 use crossterm::event::*;
 use crossterm::terminal::enable_raw_mode;
 use crossterm::terminal::disable_raw_mode;
+use crossterm::style::{Print, SetForegroundColor, SetBackgroundColor, ResetColor, Color as CrossColor, Attribute};
 
 use crate::{Size, Position, Color, Window};
 
@@ -23,7 +24,7 @@ pub struct Terminal {
 } impl Terminal {
     pub fn init(size: Size) -> Self {
         // Terminal setup
-        execute!(stdout(), terminal::SetSize(size.x, size.y))
+        execute!(stdout(), terminal::SetSize(size.x + 1, size.y + 1))
             .expect("failed to set Terminal size :(");
         execute!(stdout(), cursor::Hide)
             .expect("failed to hide cursor :(");
@@ -84,10 +85,12 @@ pub struct Terminal {
     pub fn read_line(&mut self, pos: Position, output_string: &str, color: Color, write_line: bool) -> String {
         execute!(stdout(), cursor::MoveTo(pos.x, pos.y))
             .expect("failed to move cursor :(");
-            print!("{}", output_string);
+        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b}));
+        print!("{}", output_string);
         io::stdout().flush().unwrap();
 
         let mut line = String::new();
+        let mut old_color = Color::new(0, 0, 0);
         while let Event::Key(KeyEvent { code, .. }) = event::read().expect("failed to read event :(") {
             match code {
                 KeyCode::Char(c) => {
@@ -98,6 +101,11 @@ pub struct Terminal {
                         let x = pos.x as usize + line_vec.len() + output_vec.len();
                         let y = pos.y as usize;
                         self.move_cursor(Position::new(x as u16, y as u16));
+
+                        if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
+                            execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b}));
+                            old_color = color;
+                        }
 
                         print!("{}", c.to_string());
                         io::stdout().flush().unwrap();
@@ -136,8 +144,10 @@ pub struct Terminal {
         disable_raw_mode()
             .expect("failed to leave raw mode :(");    
     }
+
     pub fn render(&mut self) -> u128 { // 80ms !!!
         // draws every window in windowbuffer front to back to text- and colorbuffer
+        let now = Instant::now();
         for i in 0..self.windows.len() {
             let window = &self.windows[i];
             for y in 0..window.size.y {
@@ -155,7 +165,7 @@ pub struct Terminal {
             }
         }
         // draws terminal text- and colorbuffer to real terminal
-        let now = Instant::now();
+        let mut old_color = Color::new(0, 0, 0);
         for y in 0..self.size.y {
         	self.move_cursor(Position::new(0, y)); // performance bummer!
             //print!("\n");
@@ -166,7 +176,12 @@ pub struct Terminal {
                     let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
                     let color = self.color_buffer[x as usize][y as usize].clone();
 
-                    print!("{}", text_slice)
+                    if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
+                        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b}));
+                        old_color = color;
+                    }
+
+                    print!("{}", text_slice);
                 }
             }
         }
