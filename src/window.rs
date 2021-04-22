@@ -22,26 +22,31 @@ use crate::Size;
 use crate::Color;
 use crate::Terminal;
 
+use rand::{thread_rng, Rng};
 
+#[derive(Clone)]
 pub struct Window {
+    pub id: u128,
     pub text_buffer: Vec<Vec<String>>,
     pub color_buffer: Vec<Vec<Color>>,
     pub size: Size,
     pub pos: Position,
     border_color: Color,
-    border_symbols: [String; 4],
+    border_symbols: [String; 8],
     title: String,
     title_color: Color,
 }
 impl Window {
     pub fn new(pos: Position, size: Size) -> Self {
         Window {
+            id: thread_rng().gen_range(0..u128::MAX),
             text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
             color_buffer: vec![vec![Color::new(0, 0, 0); size.y as usize + 1]; size.x as usize + 1],
             size: size,
             pos: pos,
             border_color: Color::new(255, 255, 255),
-            border_symbols: ["█".to_string(), "█".to_string(), "█".to_string(), "█".to_string()],
+            border_symbols: ["│".to_string(), "│".to_string(), "─".to_string(), "─".to_string(),
+                 "┌".to_string(), "┐".to_string(), "┘".to_string(), "└".to_string()], // ─ │ ┘ └ ┐ ┌
             title: "title".to_string(),
             title_color: Color::new(255, 255, 255),
         }
@@ -72,7 +77,7 @@ impl Window {
     pub fn set_border_color(&mut self, color: Color) {
         self.border_color = color;
     }
-    pub fn set_border_symbols(&mut self, symbols: [String; 4]) {
+    pub fn set_border_symbols(&mut self, symbols: [String; 8]) {
         self.border_symbols = symbols;
     }
 
@@ -95,7 +100,7 @@ impl Window {
         }
     }
 
-    pub fn move_window(&mut self, pos: Position) {
+    pub fn set_position(&mut self, pos: Position) {
         self.pos = pos;
     }
 
@@ -105,9 +110,9 @@ impl Window {
 
                 if x < self.size.x && y < self.size.y {
 
-                    // self Borders
+                    // draws Borders
                     if x == 0 {
-                        self.text_buffer[x as usize][y as usize] = self.border_symbols[0].clone();
+                        self.text_buffer[x as usize][y as usize] = self.border_symbols[0].clone(); 
                         self.color_buffer[x as usize ][y as usize ] = self.border_color;
                     }
                     if x == self.size.x - 1 {
@@ -122,12 +127,28 @@ impl Window {
                         self.text_buffer[x as usize][y as usize] = self.border_symbols[3].clone();
                         self.color_buffer[x as usize ][y as usize ] = self.border_color;
                     }
+                    // draws edges
+                    // upper left
+                    self.text_buffer[0][0] = self.border_symbols[4].clone();
+                    self.color_buffer[0][0] = self.border_color;
+
+                    // upper right
+                    self.text_buffer[(self.size.x - 1) as usize][0] = self.border_symbols[5].clone();
+                    self.color_buffer[(self.size.x - 1)as usize][0] = self.border_color;
+
+                    // bottom left
+                    self.text_buffer[(self.size.x - 1) as usize][(self.size.y - 1) as usize] = self.border_symbols[6].clone();
+                    self.color_buffer[(self.size.x - 1) as usize][(self.size.y - 1) as usize] = self.border_color;
+
+                    // bottom right
+                    self.text_buffer[0][(self.size.y - 1) as usize] = self.border_symbols[7].clone();
+                    self.color_buffer[0][(self.size.y - 1) as usize] = self.border_color;
 
 
                     // self Title
                     let mut y_title = 0;
                     let mut x_title = 0;
-                    let pos: [u16; 2] = [self.size.x / 2 - (self.title.len() / 2) as u16, 1];
+                    let pos: [u16; 2] = [self.size.x / 2 - (self.title.len() / 2) as u16, 0];
 
                     let char_vec: Vec<char> = self.title.chars().collect();
                     for i in 0..char_vec.len() as usize {

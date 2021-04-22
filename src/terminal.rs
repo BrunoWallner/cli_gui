@@ -19,6 +19,7 @@ pub struct Terminal {
     pub size: Size,
     pub text_buffer: Vec<Vec<String>>,
     pub color_buffer: Vec<Vec<Color>>,
+    pub windows: Vec<Window>,
 } impl Terminal {
     pub fn init(size: Size) -> Self {
         // Terminal setup
@@ -36,9 +37,10 @@ pub struct Terminal {
             size: size,
             text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
             color_buffer: vec![vec![Color::new(0, 0, 0); size.y as usize + 1]; size.x as usize + 1],
+            windows: Vec::new(),
         }
     }
-    pub fn clear() {
+    pub fn clear(&self) {
         execute!(stdout(), terminal::Clear(terminal::ClearType::All)).
         expect("failed to clear Terminal");
     }
@@ -135,6 +137,26 @@ pub struct Terminal {
             .expect("failed to leave raw mode :(");    
     }
     pub fn render(&mut self) {
+        // draws every window in windowbuffer front to back to text- and colorbuffer
+        for i in 0..self.windows.len() {
+            let window = &self.windows[i];
+            for y in 0..window.size.y {
+                for x in 0..window.size.x {
+
+                    if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y {
+
+                        let text_slice: String = window.text_buffer[x as usize][y as usize].clone();
+                        let color = window.color_buffer[x as usize][y as usize].clone();
+
+                        self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = text_slice;
+                        self.color_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = color;
+                    }
+                }
+            }
+        }
+        
+
+        // draws terminal text- and colorbuffer to real terminal
         for y in 0..self.size.y {
         	self.move_cursor(Position::new(0, y)); // performance bummer!
             //print!("\n");
@@ -151,20 +173,24 @@ pub struct Terminal {
         }
         io::stdout().flush().unwrap();
     }
-
-    pub fn write_window(&mut self, window: &Window) {
-        for y in 0..window.size.y {
-            for x in 0..window.size.x {
-
-                if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y {
-
-                    let text_slice: String = window.text_buffer[x as usize][y as usize].clone();
-                    let color = window.color_buffer[x as usize][y as usize].clone();
-
-                    self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = text_slice;
-                    self.color_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = color;
+    // possible very bad, slow and memory hungry !!!
+    pub fn set_top_window(&mut self, window: &Window) {
+        for i in 0..self.windows.len() {
+            if self.windows[i].id == window.id {
+                // swaps position of desired window to be at the end of windows
+                self.windows.push(self.windows[i].clone());
+                for j in i..self.windows.len() - 1 {
+                    self.windows[j] = self.windows[j + 1].clone();
                 }
+                self.windows.pop();
             }
         }
+    }
+
+    pub fn write_window(&mut self, window: &Window) {
+        self.windows.push(window.clone());
+    }
+    pub fn clear_windows(&mut self) {
+        self.windows.clear();
     }
 }
