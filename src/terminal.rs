@@ -11,9 +11,9 @@ use crossterm::event::*;
 use crossterm::terminal::enable_raw_mode;
 use crossterm::terminal::disable_raw_mode;
 
-use colored::Colorize;
-
 use crate::{Size, Position, Color, Window};
+
+use std::time::Instant;
 
 pub struct Terminal {
     pub size: Size,
@@ -84,7 +84,7 @@ pub struct Terminal {
     pub fn read_line(&mut self, pos: Position, output_string: &str, color: Color, write_line: bool) -> String {
         execute!(stdout(), cursor::MoveTo(pos.x, pos.y))
             .expect("failed to move cursor :(");
-        print!("{}", output_string.truecolor(color.r, color.g, color.b));
+            print!("{}", output_string);
         io::stdout().flush().unwrap();
 
         let mut line = String::new();
@@ -99,7 +99,7 @@ pub struct Terminal {
                         let y = pos.y as usize;
                         self.move_cursor(Position::new(x as u16, y as u16));
 
-                        print!("{}", c.to_string().truecolor(color.r, color.g, color.b));
+                        print!("{}", c.to_string());
                         io::stdout().flush().unwrap();
                     }
                     line.push(c);
@@ -136,7 +136,7 @@ pub struct Terminal {
         disable_raw_mode()
             .expect("failed to leave raw mode :(");    
     }
-    pub fn render(&mut self) {
+    pub fn render(&mut self) -> u128 { // 80ms !!!
         // draws every window in windowbuffer front to back to text- and colorbuffer
         for i in 0..self.windows.len() {
             let window = &self.windows[i];
@@ -154,9 +154,8 @@ pub struct Terminal {
                 }
             }
         }
-        
-
         // draws terminal text- and colorbuffer to real terminal
+        let now = Instant::now();
         for y in 0..self.size.y {
         	self.move_cursor(Position::new(0, y)); // performance bummer!
             //print!("\n");
@@ -167,12 +166,15 @@ pub struct Terminal {
                     let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
                     let color = self.color_buffer[x as usize][y as usize].clone();
 
-                    print!("{}", text_slice.truecolor(color.r, color.g, color.b));
+                    print!("{}", text_slice)
                 }
             }
         }
-        io::stdout().flush().unwrap();
+        io::stdout().flush().unwrap(); // 0ms
+
+        now.elapsed().as_millis()
     }
+
     // possible very bad, slow and memory hungry !!!
     pub fn set_top_window(&mut self, window: &Window) {
         for i in 0..self.windows.len() {

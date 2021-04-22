@@ -15,7 +15,7 @@ use crossterm::event::*;
 use crossterm::terminal::enable_raw_mode;
 use crossterm::terminal::disable_raw_mode;
 
-use colored::Colorize;
+//use colored::Colorize;
 
 use crate::Position;
 use crate::Size;
@@ -92,8 +92,8 @@ impl Window {
     }
 
     pub fn clear(&mut self) {
-        for y in 0..self.size.y as usize {
-            for x in 0..self.size.x {
+        for y in 1..self.size.y - 1 {
+            for x in 1..self.size.x - 1 {
                 self.text_buffer[x as usize][y as usize] = " ".to_string();
                 self.color_buffer[x as usize][y as usize] = Color::new(0, 0, 0);
             }
@@ -145,27 +145,9 @@ impl Window {
                     self.color_buffer[0][(self.size.y - 1) as usize] = self.border_color;
 
 
-                    // self Title
-                    let mut y_title = 0;
-                    let mut x_title = 0;
-                    let pos: [u16; 2] = [self.size.x / 2 - (self.title.len() / 2) as u16, 0];
-
-                    let char_vec: Vec<char> = self.title.chars().collect();
-                    for i in 0..char_vec.len() as usize {
-                        // checks if position is valid and corrects it if neccessary
-                        if pos[0] + x < self.size.x && pos[1] < self.size.y {
-            
-                            self.text_buffer[(pos[0] + x_title) as usize][(pos[1] + y_title) as usize] = char_vec[i].to_string();
-                            self.color_buffer[(pos[0] + x_title) as usize][(pos[1] + y_title) as usize] = self.title_color;
-            
-                            x_title += 1;
-                            
-                            if char_vec[i].to_string() == "\n".to_string() {
-                                y_title += 1;
-                                x_title = 0;
-                            }
-                        }          
-                    }  
+                    // draws Title  100ms !!!
+                    let pos: Position = Position::new(self.size.x / 2 - (self.title.len() / 2) as u16, 0);
+                    self.write(pos, self.title.clone(), self.title_color);
                 }
             }
         }
