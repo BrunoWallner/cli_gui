@@ -89,6 +89,8 @@ impl Window {
     }
     pub fn resize(&mut self, size: Size) {
         self.size = size;
+        self.text_buffer = vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1];
+        self.color_buffer = vec![vec![Color::new(0, 0, 0); size.y as usize + 1]; size.x as usize + 1];
     }
 
     pub fn clear(&mut self) {

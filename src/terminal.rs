@@ -2,15 +2,15 @@ use crossterm::execute;
 use crossterm::terminal;
 use crossterm::cursor;
 
-use std::{thread, time::Duration};
+use std::{time::Duration};
 
-use std::io::{self, Write, stdout, stdin};
+use std::io::{self, Write, stdout};
 
 use crossterm::event;
 use crossterm::event::*;
 use crossterm::terminal::enable_raw_mode;
 use crossterm::terminal::disable_raw_mode;
-use crossterm::style::{Print, SetForegroundColor, SetBackgroundColor, ResetColor, Color as CrossColor, Attribute};
+use crossterm::style::{SetForegroundColor, Color as CrossColor};
 
 use crate::{Size, Position, Color, Window};
 
@@ -21,6 +21,7 @@ pub struct Terminal {
     pub text_buffer: Vec<Vec<String>>,
     pub color_buffer: Vec<Vec<Color>>,
     pub windows: Vec<Window>,
+    pub key_event: KeyEvent,
 } impl Terminal {
     pub fn init(size: Size) -> Self {
         // Terminal setup
@@ -36,56 +37,49 @@ pub struct Terminal {
             .expect("failed to go into raw mode :(");
         Terminal {
             size: size,
-            text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
-            color_buffer: vec![vec![Color::new(0, 0, 0); size.y as usize + 1]; size.x as usize + 1],
+            text_buffer: vec![vec!["  ".to_string(); size.y as usize]; size.x as usize], 
+            color_buffer: vec![vec![Color::new(0, 0, 0); size.y as usize]; size.x as usize],
             windows: Vec::new(),
+            key_event: KeyEvent {code: KeyCode::Char(' '), modifiers: KeyModifiers::NONE},
         }
     }
-    pub fn clear(&self) {
-        execute!(stdout(), terminal::Clear(terminal::ClearType::All)).
-        expect("failed to clear Terminal");
+    pub fn clear(&mut self) {
+        for y in 0..self.size.y {
+            for x in 0..self.size.x {
+                self.text_buffer[x as usize][y as usize] = " ".to_string();
+                self.color_buffer[x as usize][y as usize] = Color::new(255, 255, 255);
+            }
+        }
     }
     pub fn move_cursor(&self, pos: Position) {
         execute!(stdout(), cursor::MoveTo(pos.x,pos.y))
             .expect("failed to move cursor");
     }
-    pub fn read_char(&self) -> char {
-        loop {
-            if poll(Duration::from_millis(0)).expect("") {
-                if let Event::Key(KeyEvent {
-                    code: KeyCode::Char(c),
-                    ..
-                }) = event::read().expect("")
-                {
-                    return c;
+
+    pub fn update(&mut self) {
+        self.key_event = KeyEvent {code: KeyCode::Char(' '), modifiers: KeyModifiers::NONE};
+            loop {
+                if poll(Duration::from_millis(0)).expect("") {
+                    match read().expect("") {
+                        Event::Key(event) => {self.key_event = event},
+                        Event::Resize(x, y) => {self.size.x = x; self.size.y = y},
+                        _ => (),
+                    }
                 }
                 else {
-                return ' ';
+                    break;
                 }
-            } else {
-                return ' ';
+
+                self.text_buffer = vec![vec![" ".to_string(); self.size.y as usize]; self.size.x as usize];
+                self.color_buffer = vec![vec![Color::new(0, 0, 0); self.size.y as usize]; self.size.x as usize];
+
             }
-        }
     }
-    pub fn read_key(&self) -> KeyEvent {
-    	loop {
-            if poll(Duration::from_millis(0)).expect("") {
-                if let Event::Key(KeyEvent { code: keycode, modifiers: modifiers }) = event::read().expect("")
-                {
-                    return KeyEvent {code: keycode, modifiers: modifiers};
-                }
-                else {
-                	return KeyEvent { code: KeyCode::Char(' '), modifiers: KeyModifiers::NONE };
-                }
-            } else {
-            	return KeyEvent { code: KeyCode::Char(' '), modifiers: KeyModifiers::NONE };
-            }
-        }
-    }
+
     pub fn read_line(&mut self, pos: Position, output_string: &str, color: Color, write_line: bool) -> String {
         execute!(stdout(), cursor::MoveTo(pos.x, pos.y))
             .expect("failed to move cursor :(");
-        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b}));
+        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
         print!("{}", output_string);
         io::stdout().flush().unwrap();
 
@@ -103,7 +97,7 @@ pub struct Terminal {
                         self.move_cursor(Position::new(x as u16, y as u16));
 
                         if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
-                            execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b}));
+                            execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
                             old_color = color;
                         }
 
@@ -177,7 +171,7 @@ pub struct Terminal {
                     let color = self.color_buffer[x as usize][y as usize].clone();
 
                     if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
-                        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b}));
+                        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
                         old_color = color;
                     }
 
@@ -187,7 +181,7 @@ pub struct Terminal {
         }
         io::stdout().flush().unwrap(); // 0ms
 
-        now.elapsed().as_millis()
+        now.elapsed().as_nanos()
     }
 
     // possible very bad, slow and memory hungry !!!
