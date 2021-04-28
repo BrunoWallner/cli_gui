@@ -21,14 +21,14 @@ use crate::Position;
 use crate::Size;
 use crate::Color;
 use crate::Terminal;
+use crate::Pixel;
 
 use rand::{thread_rng, Rng};
 
 #[derive(Clone)]
 pub struct Window {
     pub id: u128,
-    pub text_buffer: Vec<Vec<String>>,
-    pub color_buffer: Vec<Vec<Color>>,
+    pub pixel_buffer: Vec<Pixel>,
     pub size: Size,
     pub pos: Position,
     border_color: Color,
@@ -40,15 +40,14 @@ impl Window {
     pub fn new(pos: Position, size: Size) -> Self {
         Window {
             id: thread_rng().gen_range(0..u128::MAX),
-            text_buffer: vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1], 
-            color_buffer: vec![vec![Color::new(0, 0, 0); size.y as usize + 1]; size.x as usize + 1],
+            pixel_buffer: vec![Pixel::new(" ".to_string(), Color::white()); (size.x * size.y) as usize],
             size: size,
             pos: pos,
-            border_color: Color::new(255, 255, 255),
+            border_color: Color::rgb(255, 255, 255),
             border_symbols: ["│".to_string(), "│".to_string(), "─".to_string(), "─".to_string(),
                  "┌".to_string(), "┐".to_string(), "┘".to_string(), "└".to_string()], // ─ │ ┘ └ ┐ ┌
             title: "title".to_string(),
-            title_color: Color::new(255, 255, 255),
+            title_color: Color::rgb(255, 255, 255),
         }
     }
 
@@ -61,14 +60,15 @@ impl Window {
             // checks if position is valid and corrects it if neccessary
             if pos.x + x < self.size.x && pos.y < self.size.y {
 
-                self.text_buffer[(pos.x + x) as usize][(pos.y + y) as usize] = char_vec[i].to_string();
-                self.color_buffer[(pos.x + x) as usize][(pos.y + y) as usize] = color;
+                self.pixel_buffer[((pos.x + x) + ((pos.y + y) * self.size.x)) as usize] = Pixel::new(char_vec[i].to_string(), color);
 
                 x += 1;
-
-                if char_vec[i].to_string() == "\n".to_string() {
-                    y += 1;
-                    x = 0;
+                
+                match char_vec[i].to_string().as_str() {
+                    "\n" => {y += 1; x = 0},
+                    "\t" => {x += 4},
+                    "\r" => {if y >= 1 {y -= 1}},
+                    _ => (),
                 }
             }          
         }      
@@ -89,17 +89,11 @@ impl Window {
     }
     pub fn resize(&mut self, size: Size) {
         self.size = size;
-        self.text_buffer = vec![vec!["  ".to_string(); size.y as usize + 1]; size.x as usize + 1];
-        self.color_buffer = vec![vec![Color::new(0, 0, 0); size.y as usize + 1]; size.x as usize + 1];
+        self.pixel_buffer = vec![Pixel::new(" ".to_string(), Color::white()); (self.size.x * self.size.y) as usize];
     }
 
     pub fn clear(&mut self) {
-        for y in 1..self.size.y - 1 {
-            for x in 1..self.size.x - 1 {
-                self.text_buffer[x as usize][y as usize] = " ".to_string();
-                self.color_buffer[x as usize][y as usize] = Color::new(0, 0, 0);
-            }
-        }
+        self.pixel_buffer = vec![Pixel::new(" ".to_string(), Color::white()); (self.size.x * self.size.y) as usize];
     }
 
     pub fn set_position(&mut self, pos: Position) {
@@ -109,58 +103,46 @@ impl Window {
     pub fn decorate(&mut self) {
         for y in 0..self.size.y {
             for x in 0..self.size.x {
-
-                if x < self.size.x && y < self.size.y {
-
-                    // draws Borders
-                    if x == 0 {
-                        self.text_buffer[x as usize][y as usize] = self.border_symbols[0].clone(); 
-                        self.color_buffer[x as usize ][y as usize ] = self.border_color;
-                    }
-                    if x == self.size.x - 1 {
-                        self.text_buffer[x as usize][y as usize] = self.border_symbols[1].clone();
-                        self.color_buffer[x as usize ][y as usize ] = self.border_color;
-                    }
-                    if y == 0 {
-                        self.text_buffer[x as usize][y as usize] = self.border_symbols[2].clone();
-                        self.color_buffer[x as usize ][y as usize ] = self.border_color;
-                    }
-                    if y == self.size.y - 1 {
-                        self.text_buffer[x as usize][y as usize] = self.border_symbols[3].clone();
-                        self.color_buffer[x as usize ][y as usize ] = self.border_color;
-                    }
-                    // draws edges
-                    // upper left
-                    self.text_buffer[0][0] = self.border_symbols[4].clone();
-                    self.color_buffer[0][0] = self.border_color;
-
-                    // upper right
-                    self.text_buffer[(self.size.x - 1) as usize][0] = self.border_symbols[5].clone();
-                    self.color_buffer[(self.size.x - 1)as usize][0] = self.border_color;
-
-                    // bottom left
-                    self.text_buffer[(self.size.x - 1) as usize][(self.size.y - 1) as usize] = self.border_symbols[6].clone();
-                    self.color_buffer[(self.size.x - 1) as usize][(self.size.y - 1) as usize] = self.border_color;
-
-                    // bottom right
-                    self.text_buffer[0][(self.size.y - 1) as usize] = self.border_symbols[7].clone();
-                    self.color_buffer[0][(self.size.y - 1) as usize] = self.border_color;
-
-
-                    // draws Title  100ms !!!
-                    let pos: Position = Position::new(self.size.x / 2 - (self.title.len() / 2) as u16, 0);
-                    self.write(pos, self.title.clone(), self.title_color);
+                // draws Borders
+                if x == 0 {
+                    self.write(Position::new(x, y), self.border_symbols[0].clone(), self.border_color);
+                }
+                if x == self.size.x - 1 {
+                    self.write(Position::new(x, y), self.border_symbols[1].clone(), self.border_color);
+                }
+                if y == 0 {
+                    self.write(Position::new(x, y), self.border_symbols[2].clone(), self.border_color);
+                }
+                if y == self.size.y - 1 {
+                    self.write(Position::new(x, y), self.border_symbols[3].clone(), self.border_color);
                 }
             }
         }
+        // draws edges
+        // upper left
+        self.write(Position::new(0, 0), self.border_symbols[4].clone(), self.border_color);
+
+        // upper right
+        self.write(Position::new(self.size.x - 1, 0), self.border_symbols[5].clone(), self.border_color);
+
+        // bottom right
+        self.write(Position::new(self.size.x - 1, self.size.y - 1), self.border_symbols[6].clone(), self.border_color);
+
+        // bottom left
+        self.write(Position::new(0, self.size.y - 1), self.border_symbols[7].clone(), self.border_color);
+
+        // draws Title  100ms !!!
+        let pos: Position = Position::new(self.size.x / 2 - (self.title.len() / 2) as i32, 0);
+        self.write(pos, self.title.clone(), self.title_color);
     }
 
     pub fn write_window(&mut self, window: &Window) {
         for y in 0..window.size.y {
             for x in 0..window.size.x {
-                if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y {
-                    self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.text_buffer[x as usize][y as usize].clone();
-                    self.color_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = window.color_buffer[x as usize][y as usize].clone();
+                if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y
+                && x + window.pos.x > 0 && y + window.pos.y > 0 {
+                    self.pixel_buffer[((x + window.pos.x) + ((y + window.pos.y) * self.size.x)) as usize] = 
+                        window.pixel_buffer[(x + (y * window.size.x)) as usize].clone();
                 }
             }
         }

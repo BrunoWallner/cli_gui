@@ -12,20 +12,17 @@ use crossterm::terminal::enable_raw_mode;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::style::{SetForegroundColor, Color as CrossColor};
 
-use crate::{Size, Position, Color, Window};
-
-use std::time::Instant;
+use crate::{Size, Position, Color, Window, Pixel};
 
 pub struct Terminal {
     pub size: Size,
-    pub text_buffer: Vec<Vec<String>>,
-    pub color_buffer: Vec<Vec<Color>>,
+    pub pixel_buffer: Vec<Pixel>,
     pub windows: Vec<Window>,
     pub key_event: KeyEvent,
 } impl Terminal {
     pub fn init(size: Size) -> Self {
         // Terminal setup
-        execute!(stdout(), terminal::SetSize(size.x + 1, size.y + 1))
+        execute!(stdout(), terminal::SetSize((size.x + 1) as u16, (size.y + 1) as u16))
             .expect("failed to set Terminal size :(");
         execute!(stdout(), cursor::Hide)
             .expect("failed to hide cursor :(");
@@ -37,22 +34,16 @@ pub struct Terminal {
             .expect("failed to go into raw mode :(");
         Terminal {
             size: size,
-            text_buffer: vec![vec!["  ".to_string(); size.y as usize]; size.x as usize], 
-            color_buffer: vec![vec![Color::new(0, 0, 0); size.y as usize]; size.x as usize],
+            pixel_buffer: vec![Pixel::new(" ".to_string(), Color::white()); (size.x * size.y) as usize], 
             windows: Vec::new(),
             key_event: KeyEvent {code: KeyCode::Char(' '), modifiers: KeyModifiers::NONE},
         }
     }
     pub fn clear(&mut self) {
-        for y in 0..self.size.y {
-            for x in 0..self.size.x {
-                self.text_buffer[x as usize][y as usize] = " ".to_string();
-                self.color_buffer[x as usize][y as usize] = Color::new(255, 255, 255);
-            }
-        }
+        self.pixel_buffer = vec![Pixel::new(" ".to_string(), Color::white()); (self.size.x * self.size.y) as usize];
     }
     pub fn move_cursor(&self, pos: Position) {
-        execute!(stdout(), cursor::MoveTo(pos.x,pos.y))
+        execute!(stdout(), cursor::MoveTo(pos.x as u16, pos.y as u16))
             .expect("failed to move cursor");
     }
 
@@ -62,29 +53,30 @@ pub struct Terminal {
                 if poll(Duration::from_millis(0)).expect("") {
                     match read().expect("") {
                         Event::Key(event) => {self.key_event = event},
-                        Event::Resize(x, y) => {self.size.x = x; self.size.y = y},
+                        Event::Resize(x, y) => {
+                            self.size.x = x as i32 - 1; 
+                            self.size.y = y as i32 - 1; 
+                            self.pixel_buffer = vec![Pixel::new(" ".to_string(), Color::white()); (self.size.x * self.size.y) as usize];
+                        },
                         _ => (),
                     }
                 }
                 else {
                     break;
                 }
-
-                self.text_buffer = vec![vec![" ".to_string(); self.size.y as usize]; self.size.x as usize];
-                self.color_buffer = vec![vec![Color::new(0, 0, 0); self.size.y as usize]; self.size.x as usize];
-
             }
     }
 
     pub fn read_line(&mut self, pos: Position, output_string: &str, color: Color, write_line: bool) -> String {
-        execute!(stdout(), cursor::MoveTo(pos.x, pos.y))
+        execute!(stdout(), cursor::MoveTo(pos.x as u16, pos.y as u16))
             .expect("failed to move cursor :(");
-        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
+        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b}))
+            .expect("failed to change color");
         print!("{}", output_string);
         io::stdout().flush().unwrap();
 
         let mut line = String::new();
-        let mut old_color = Color::new(0, 0, 0);
+        let mut old_color = Color::rgb(0, 0, 0);
         while let Event::Key(KeyEvent { code, .. }) = event::read().expect("failed to read event :(") {
             match code {
                 KeyCode::Char(c) => {
@@ -94,7 +86,7 @@ pub struct Terminal {
 
                         let x = pos.x as usize + line_vec.len() + output_vec.len();
                         let y = pos.y as usize;
-                        self.move_cursor(Position::new(x as u16, y as u16));
+                        self.move_cursor(Position::new(x as i32, y as i32));
 
                         if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
                             execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
@@ -139,9 +131,42 @@ pub struct Terminal {
             .expect("failed to leave raw mode :(");    
     }
 
-    pub fn render(&mut self) -> u128 { // 80ms !!!
+    pub fn render_fast(&mut self, c: Color) { // 80ms !!!
         // draws every window in windowbuffer front to back to text- and colorbuffer
-        let now = Instant::now();
+        for i in 0..self.windows.len() {
+            let window = &self.windows[i];
+            for y in 0..window.size.y {
+                for x in 0..window.size.x {
+
+                    if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y
+                    && x + window.pos.x >= 0 && y + window.pos.y >= 0 {
+
+                        let text: String = window.pixel_buffer[(x + (y * window.size.x)) as usize].text.clone();
+                        let color = window.pixel_buffer[(x + (y * window.size.x)) as usize].color.clone();
+
+                        self.pixel_buffer[((x + window.pos.x) + ((y + window.pos.y) * self.size.x)) as usize] = Pixel::new(text, color);
+                    }
+                }
+            }
+        }
+        // draws terminal text- and colorbuffer to real terminal
+        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: c.r, g : c.g, b : c.b}))
+            .expect("failed to change color");
+        for y in 0..self.size.y {
+            self.move_cursor(Position::new(0, y)); // performance bummer!
+
+            let mut line: String = String::new();
+
+            for x in 0..self.size.x {
+                line.push_str(&self.pixel_buffer[(x + (y * self.size.x)) as usize].text);
+            }
+            print!("{}", line);
+        }
+        io::stdout().flush().unwrap(); // 0ms
+    }
+
+    pub fn render(&mut self) { // 80ms !!!
+        // draws every window in windowbuffer front to back to text- and colorbuffer
         for i in 0..self.windows.len() {
             let window = &self.windows[i];
             for y in 0..window.size.y {
@@ -149,39 +174,35 @@ pub struct Terminal {
 
                     if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y {
 
-                        let text_slice: String = window.text_buffer[x as usize][y as usize].clone();
-                        let color = window.color_buffer[x as usize][y as usize].clone();
+                        let text: String = window.pixel_buffer[(x + (y * window.size.x)) as usize].text.clone();
+                        let color = window.pixel_buffer[(x + (y * window.size.x)) as usize].color.clone();
 
-                        self.text_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = text_slice;
-                        self.color_buffer[(x + window.pos.x) as usize][(y + window.pos.y) as usize] = color;
+                        self.pixel_buffer[((x + window.pos.x) + ((y + window.pos.y) * self.size.x)) as usize] = Pixel::new(text, color);
                     }
                 }
             }
         }
         // draws terminal text- and colorbuffer to real terminal
-        let mut old_color = Color::new(0, 0, 0);
+        let mut old_color = Color::white();
         for y in 0..self.size.y {
         	self.move_cursor(Position::new(0, y)); // performance bummer!
-            //print!("\n");
             for x in 0..self.size.x {
 
                 if x < self.size.x && y < self.size.y {
 
-                    let text_slice: &str = &*self.text_buffer[x as usize][y as usize];
-                    let color = self.color_buffer[x as usize][y as usize].clone();
+                    let text: String = self.pixel_buffer[(x + (y * self.size.x)) as usize].text.clone();
+                    let color = self.pixel_buffer[(x + (y * self.size.x)) as usize].color.clone();
 
                     if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
                         execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
                         old_color = color;
                     }
 
-                    print!("{}", text_slice);
+                    print!("{}", text);
                 }
             }
         }
         io::stdout().flush().unwrap(); // 0ms
-
-        now.elapsed().as_nanos()
     }
 
     // possible very bad, slow and memory hungry !!!
