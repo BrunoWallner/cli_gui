@@ -74,6 +74,10 @@ impl Window {
         }      
     }
 
+    pub fn center(&mut self, terminal: &Terminal) {
+        self.pos = Position::new(terminal.size.x / 2 - self.size.x / 2, terminal.size.y / 2 - self.size.y / 2);
+    }
+
     pub fn set_border_color(&mut self, color: Color) {
         self.border_color = color;
     }

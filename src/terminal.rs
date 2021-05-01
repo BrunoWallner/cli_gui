@@ -11,6 +11,7 @@ use crossterm::event::*;
 use crossterm::terminal::enable_raw_mode;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::style::{SetForegroundColor, Color as CrossColor};
+use crossterm::style::ResetColor;
 
 use crate::{Size, Position, Color, Window, Pixel};
 
@@ -53,11 +54,6 @@ pub struct Terminal {
                 if poll(Duration::from_millis(0)).expect("") {
                     match read().expect("") {
                         Event::Key(event) => {self.key_event = event},
-                        Event::Resize(x, y) => {
-                            self.size.x = x as i32 - 1; 
-                            self.size.y = y as i32 - 1; 
-                            self.pixel_buffer = vec![Pixel::new(" ".to_string(), Color::white()); (self.size.x * self.size.y) as usize];
-                        },
                         _ => (),
                     }
                 }
@@ -65,6 +61,9 @@ pub struct Terminal {
                     break;
                 }
             }
+        self.size.x = terminal::size().unwrap().0 as i32;
+        self.size.y = terminal::size().unwrap().1 as i32;
+        self.pixel_buffer = vec![Pixel::new(" ".to_string(), Color::white()); (self.size.x * self.size.y) as usize];
     }
 
     pub fn read_line(&mut self, pos: Position, output_string: &str, color: Color, write_line: bool) -> String {
@@ -77,6 +76,8 @@ pub struct Terminal {
 
         let mut line = String::new();
         let mut old_color = Color::rgb(0, 0, 0);
+        'running: loop {
+
         while let Event::Key(KeyEvent { code, .. }) = event::read().expect("failed to read event :(") {
             match code {
                 KeyCode::Char(c) => {
@@ -99,7 +100,7 @@ pub struct Terminal {
                     line.push(c);
                 },
                 KeyCode::Enter => {
-                    break;
+                    break 'running;
                 },
                 KeyCode::Backspace => {
                     if write_line {
@@ -119,6 +120,11 @@ pub struct Terminal {
                 _ => {}
             }
         }
+
+        }
+        let color = Color::white();
+        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b}))
+            .expect("failed to change color");
         return line;
     }
     pub fn quit(&self) {
@@ -172,7 +178,8 @@ pub struct Terminal {
             for y in 0..window.size.y {
                 for x in 0..window.size.x {
 
-                    if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y {
+                    if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y 
+                    && x + window.pos.x >= 0 && y + window.pos.y >= 0 {
 
                         let text: String = window.pixel_buffer[(x + (y * window.size.x)) as usize].text.clone();
                         let color = window.pixel_buffer[(x + (y * window.size.x)) as usize].color.clone();
@@ -188,18 +195,53 @@ pub struct Terminal {
         	self.move_cursor(Position::new(0, y)); // performance bummer!
             for x in 0..self.size.x {
 
-                if x < self.size.x && y < self.size.y {
+                let text: String = self.pixel_buffer[(x + (y * self.size.x)) as usize].text.clone();
+                let color = self.pixel_buffer[(x + (y * self.size.x)) as usize].color.clone();
 
-                    let text: String = self.pixel_buffer[(x + (y * self.size.x)) as usize].text.clone();
-                    let color = self.pixel_buffer[(x + (y * self.size.x)) as usize].color.clone();
-
-                    if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
-                        execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
-                        old_color = color;
-                    }
-
-                    print!("{}", text);
+                if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
+                    execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
+                       old_color = color;
                 }
+                print!("{}", text);
+            }
+        }
+        io::stdout().flush().unwrap(); // 0ms
+    }
+
+    pub fn render_accurate(&mut self) { // 80ms !!!
+        // draws every window in windowbuffer front to back to text- and colorbuffer
+        for i in 0..self.windows.len() {
+            let window = &self.windows[i];
+            for y in 0..window.size.y {
+                for x in 0..window.size.x {
+
+                    if x + window.pos.x < self.size.x && y + window.pos.y < self.size.y 
+                    && x + window.pos.x >= 0 && y + window.pos.y >= 0 {
+
+                        let text: String = window.pixel_buffer[(x + (y * window.size.x)) as usize].text.clone();
+                        let color = window.pixel_buffer[(x + (y * window.size.x)) as usize].color.clone();
+
+                        self.pixel_buffer[((x + window.pos.x) + ((y + window.pos.y) * self.size.x)) as usize] = Pixel::new(text, color);
+                    }
+                }
+            }
+        }
+        // draws terminal text- and colorbuffer to real terminal
+        let mut old_color = Color::white();
+        for y in 0..self.size.y {
+            for x in 0..self.size.x {
+
+                self.move_cursor(Position::new(x, y)); // performance bummer!
+
+                let text: String = self.pixel_buffer[(x + (y * self.size.x)) as usize].text.clone();
+                let color = self.pixel_buffer[(x + (y * self.size.x)) as usize].color.clone();
+
+                if color.r != old_color.r || color.g != old_color.g || color.b != old_color.b {
+                    execute!(stdout(), SetForegroundColor(CrossColor::Rgb {r: color.r, g : color.g, b : color.b})).expect("failed to change color");
+                    old_color = color;
+                }
+
+                print!("{}", text);
             }
         }
         io::stdout().flush().unwrap(); // 0ms
