@@ -49,7 +49,7 @@ pub struct Terminal {
     }
 
     pub fn update(&mut self) {
-        self.key_event = KeyEvent {code: KeyCode::Char(' '), modifiers: KeyModifiers::NONE};
+        self.key_event = KeyEvent {code: KeyCode::Null, modifiers: KeyModifiers::NONE};
             loop {
                 if poll(Duration::from_millis(0)).expect("") {
                     match read().expect("") {
